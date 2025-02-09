@@ -2,7 +2,6 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using OpenCL.Net;
 using System.Threading.Tasks;
 
 class Program
@@ -21,33 +20,12 @@ class Program
         long totalTime = 0;
         Stopwatch stopwatch = new Stopwatch();
 
-        using (var gpuMultiplication = method == "g" ? new MatrixProd.MatrixGPUMultiplication() : null)
-        using (var hybridMultiplication = method == "h" ? new MatrixProd.MatrixHybridMultiplication() : null)
+        using (var multiplier = MatrixProd.MatrixMultiplicationFactory.CreateMultiplier(method))
         {
             for (int i = 0; i < ITERATIONS; i++)
             {
                 stopwatch.Restart();
-                //The await must be included here
-                switch (method)
-                {
-                    case "f":
-                        var matrixFilMultiplication = new MatrixProd.MatrixFilMultiplication();
-                        await matrixFilMultiplication.multiplicar(m1, m2);
-                        break;
-                    case "c":
-                        var matrixColMultiplication = new MatrixProd.MatrixColMultiplication();
-                        await matrixColMultiplication.multiplicar(m1, m2);
-                        break;
-                    case "g":
-                        if (gpuMultiplication != null)
-                            await gpuMultiplication.multiplicar(m1, m2);
-                        break;
-                    case "h":
-                        if (hybridMultiplication != null)
-                            await hybridMultiplication.multiplicar(m1, m2);
-                        break;
-                }
-
+                await multiplier.multiplicar(m1, m2);
                 stopwatch.Stop();
                 totalTime += stopwatch.ElapsedMilliseconds;
             }
@@ -72,12 +50,12 @@ class Program
                 double timeGPU = await RunBenchmark(size, "g");
                 double timeHybrid = await RunBenchmark(size, "h");
 
-                writer.WriteLine($"{size},{timeRows.ToString("F2", culture)},{timeCols.ToString("F2", culture)},{timeGPU.ToString("F2", culture)},{timeHybrid.ToString("F2", culture)}");
+                writer.WriteLine($"{size},{timeRows:F2},{timeCols:F2},{timeGPU:F2},{timeHybrid:F2}");
                 Console.WriteLine($"Completado tamaño {size}x{size}:");
-                Console.WriteLine($"  Filas: {timeRows.ToString("F2", culture)}ms");
-                Console.WriteLine($"  Columnas: {timeCols.ToString("F2", culture)}ms");
-                Console.WriteLine($"  GPU: {timeGPU.ToString("F2", culture)}ms");
-                Console.WriteLine($"  Hybrid: {timeHybrid.ToString("F2", culture)}ms");
+                Console.WriteLine($"  Filas: {timeRows:F2}ms");
+                Console.WriteLine($"  Columnas: {timeCols:F2}ms");
+                Console.WriteLine($"  GPU: {timeGPU:F2}ms");
+                Console.WriteLine($"  Hybrid: {timeHybrid:F2}ms");
             }
         }
 
@@ -100,20 +78,27 @@ class Program
 
     static async Task Main(string[] args)
     {
-        if (args.Length != 2)
-        {
-            Console.WriteLine("Usage: dotnet run <size/csv> <f/c/g/h>");
-            Console.WriteLine("     size: integer for matrix size");
-            Console.WriteLine("     csv: generates comparative results for multiple sizes");
-            Console.WriteLine("     f: CPU optimized multiplication");
-            Console.WriteLine("     c: column multiplication");
-            Console.WriteLine("     g: GPU optimized multiplication");
-            Console.WriteLine("     h: hybrid CPU-GPU multiplication");
-            return;
-        }
-
         try
         {
+            // Download GPU-specific code if needed
+            if (!File.Exists("MatrixGPUMultiplication.cs"))
+            {
+                Console.WriteLine("Downloading GPU-specific optimizations...");
+                await MatrixProd.MatrixMultiplicationFactory.DownloadAndSetupGPUCode();
+            }
+
+            if (args.Length != 2)
+            {
+                Console.WriteLine("Usage: dotnet run <size/csv> <f/c/g/h>");
+                Console.WriteLine("     size: integer for matrix size");
+                Console.WriteLine("     csv: generates comparative results for multiple sizes");
+                Console.WriteLine("     f: CPU optimized multiplication");
+                Console.WriteLine("     c: column multiplication");
+                Console.WriteLine("     g: GPU optimized multiplication");
+                Console.WriteLine("     h: hybrid CPU-GPU multiplication");
+                return;
+            }
+
             if (args[0].ToLower() == "csv")
             {
                 await GenerateCSVFiles();
@@ -135,10 +120,9 @@ class Program
                 await RunTest(size, method);
             }
         }
-        catch (Exception ex) when (ex.Message.Contains("OpenCL"))
+        catch (NotImplementedException)
         {
-            Console.WriteLine($"OpenCL Error: {ex.Message}");
-            Console.WriteLine("Make sure you have AMD drivers and OpenCL runtime installed");
+            Console.WriteLine("GPU multiplication is not available. Please run the installer first to download GPU-specific code.");
         }
         catch (Exception ex)
         {

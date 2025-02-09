@@ -1,6 +1,6 @@
 # Matrix Multiplication Project
 
-High-performance matrix multiplication implementation using CPU and GPU acceleration.
+High-performance matrix multiplication implementation with automatic GPU detection and optimization.
 
 ## System Requirements
 
@@ -15,20 +15,40 @@ High-performance matrix multiplication implementation using CPU and GPU accelera
 - AMD or NVIDIA GPU
 - Root privileges (sudo)
 
-## Quick Installation
+## Project Structure
 
-### Windows
-1. Open PowerShell as Administrator
-2. Navigate to the project directory
-3. Run:
+This project uses a modular approach to handle different GPU implementations:
+
+- **Main Branch**: Contains core functionality
+  - Base matrix operations
+  - CPU-based implementations
+  - GPU detection scripts
+  - Auto-download mechanism for GPU-specific code
+
+- **nvidia-gpu Branch**: NVIDIA-specific implementation
+  - CUDA-optimized code
+  - NVIDIA-specific kernel tuning
+  - Required CUDA dependencies
+
+- **amd-gpu Branch**: AMD-specific implementation
+  - ROCm/OpenCL optimized code
+  - GCN architecture optimizations
+  - Required AMD dependencies
+
+## Automatic Installation
+
+The installer:
+1. Detects your GPU vendor
+2. Downloads only the necessary GPU-specific code
+3. Installs required dependencies
+4. Builds with vendor-specific optimizations
+
+### Windows Installation
 ```powershell
 .\install_windows.ps1
 ```
 
-### Linux
-1. Open terminal
-2. Navigate to the project directory
-3. Run:
+### Linux Installation
 ```bash
 chmod +x install_linux.sh
 sudo ./install_linux.sh
@@ -49,9 +69,17 @@ If the automatic installer doesn't work, you can install the dependencies manual
 3. For AMD GPUs: Install ROCm OpenCL
 4. Install OpenCL ICD Loader
 
+## Features
+
+- Automatic GPU vendor detection
+- Vendor-specific optimizations:
+  - NVIDIA: CUDA support, warp-aware scheduling, unified memory
+  - AMD: GCN architecture optimizations, vectorized operations
+- Hybrid CPU-GPU computation for smaller matrices
+- Benchmarking tools
+
 ## Usage
 
-Run matrix multiplication with different methods:
 ```bash
 # CPU row-based multiplication (size 1000x1000)
 dotnet run 1000 f
@@ -59,44 +87,87 @@ dotnet run 1000 f
 # CPU column-based multiplication
 dotnet run 1000 c
 
-# GPU multiplication
+# GPU multiplication (auto-detects and downloads required code)
 dotnet run 1000 g
 
 # Hybrid CPU-GPU multiplication
 dotnet run 1000 h
 
-# Run full benchmark suite and generate CSV
+# Run benchmarks and generate CSV
 dotnet run csv
 ```
 
 ## Performance Tips
 
-1. For best GPU performance:
-   - Use matrix sizes that are multiples of 16
-   - Prefer larger matrices (1000x1000 or larger)
-   - Keep matrices in GPU memory for multiple operations
+### For NVIDIA GPUs
+- Optimal matrix sizes: multiples of 32
+- Enable compute mode in NVIDIA settings
+- Monitor temperature for thermal throttling
 
-2. For best CPU performance:
-   - Use the hybrid mode for matrices smaller than 500x500
-   - Enable CPU performance mode in your OS
-   - Close other CPU-intensive applications
+### For AMD GPUs
+- Optimal matrix sizes: multiples of 64
+- Enable high-performance mode
+- Use latest ROCm drivers
+
+### General Tips
+- Prefer large matrices (>1000x1000) for GPU
+- Use CPU methods for smaller matrices (<500x500)
+- Keep matrices in GPU memory when possible
 
 ## Troubleshooting
 
-### Windows
-- If CUDA initialization fails, verify NVIDIA drivers are up to date
-- If OpenCL fails, verify GPU drivers are installed correctly
-- Run `nvidia-smi` (NVIDIA) or `rocm-smi` (AMD) to verify GPU detection
+### Common Issues
 
-### Linux
-- If CUDA/OpenCL fails, check driver installation with:
-  ```bash
-  # NVIDIA
-  nvidia-smi
-  # AMD
-  rocm-smi
-  ```
-- Verify OpenCL installation:
-  ```bash
-  clinfo
-  ```
+1. "GPU multiplication is not available"
+   - Run the installer first to download GPU-specific code
+   - Check your internet connection
+   - Verify GPU drivers are installed
+
+2. "Failed to detect GPU"
+   - Update GPU drivers
+   - Check if GPU is recognized by system
+   - Run with administrator/root privileges
+
+### Debug Commands
+
+#### Windows
+```powershell
+# Check GPU vendor and driver
+wmic path win32_VideoController get name, driverversion
+
+# For NVIDIA:
+nvidia-smi
+nvcc --version
+
+# For AMD:
+rocm-smi
+```
+
+#### Linux
+```bash
+# Check GPU vendor
+lspci | grep -i "vga\|3d"
+
+# For NVIDIA:
+nvidia-smi
+nvcc --version
+
+# For AMD:
+rocm-smi
+clinfo
+```
+
+## Development
+
+To contribute:
+1. Identify target GPU architecture
+2. Use appropriate branch:
+   - NVIDIA optimizations → nvidia-gpu branch
+   - AMD optimizations → amd-gpu branch
+   - Core functionality → main branch
+3. Test with various matrix sizes
+4. Submit pull request
+
+## License
+
+MIT License - See LICENSE file for details.

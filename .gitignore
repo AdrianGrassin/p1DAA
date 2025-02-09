@@ -1,0 +1,39 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# VS Code files
+.vscode/
+
+# Results and temp files
+results_comparison.csv
+*.tmp
+
+# GPU-specific files that will be in their respective branches
+MatrixCUDAMultiplication.cs
+MatrixGPUMultiplication.cs
+
+# Documentation and reports (optional per branch)
+docs/
+informes/

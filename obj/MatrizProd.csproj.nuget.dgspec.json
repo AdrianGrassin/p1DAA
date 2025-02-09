@@ -38,16 +38,9 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
-            "ManagedCuda-12": {
+            "System.Management.Automation": {
               "target": "Package",
-              "version": "[12.3.51, )"
-            },
-            "OpenCL.Net": {
-              "target": "Package",
-              "version": "[2.2.9, )",
-              "noWarn": [
-                "NU1701"
-              ]
+              "version": "[7.4.0, )"
             }
           },
           "imports": [
