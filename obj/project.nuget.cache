@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "dgSpecHash": "RV5EXjxkLSQIXjeDWzNOGCJ9iZhhvWwlg5m6sWgjtJzHKxrFIypdkeLq211y/dAimrVRdipIzLlkwyZ5fDAKDg==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\grass\\Desktop\\P1\\MatrixProd\\MatrizProd.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\grass\\.nuget\\packages\\managedcuda-12\\12.3.54\\managedcuda-12.12.3.54.nupkg.sha512",
+    "C:\\Users\\grass\\.nuget\\packages\\opencl.net\\2.2.9\\opencl.net.2.2.9.nupkg.sha512"
+  ],
+  "logs": [
+    {
+      "code": "NU1603",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "MatrizProd depends on ManagedCuda-12 (>= 12.3.51) but ManagedCuda-12 12.3.51 was not found. An approximate best match of ManagedCuda-12 12.3.54 was resolved.",
+      "libraryId": "ManagedCuda-12",
+      "targetGraphs": [
+        "net8.0"
+      ]
+    }
+  ]
+}

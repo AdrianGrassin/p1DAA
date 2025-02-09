@@ -1,0 +1,158 @@
+\documentclass[11pt]{report}
+
+% Paquetes y configuraciones adicionales
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{geometry}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titling}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{wasysym}
+\usepackage{tikzsymbols}
+\usepackage{fancyvrb}
+\usepackage{xurl}
+\usepackage{hyperref}
+\usepackage{subcaption}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\usepackage[spanish]{babel}
+
+\newcommand{\subtitle}[1]{
+  \posttitle{
+    \par\end{center}
+    \begin{center}\large#1\end{center}
+    \vskip0.5em}
+}
+
+% Configura los márgenes
+\geometry{
+  left=2cm,   % Ajusta este valor al margen izquierdo deseado
+  right=2cm,  % Ajusta este valor al margen derecho deseado
+  top=3cm,
+  bottom=3cm,
+}
+
+% Configuración de los títulos de las secciones
+\titlespacing{\section}{0pt}{\parskip}{\parskip}
+\titlespacing{\subsection}{0pt}{\parskip}{\parskip}
+\titlespacing{\subsubsection}{0pt}{\parskip}{\parskip}
+
+% Redefinir el formato de los capítulos y añadir un punto después del número
+\makeatletter
+\renewcommand{\@makechapterhead}[1]{%
+  \vspace*{0\p@} % Ajusta este valor para el espaciado deseado antes del título del capítulo
+  {\parindent \z@ \raggedright \normalfont
+    \ifnum \c@secnumdepth >\m@ne
+        \huge\bfseries \thechapter.\ % Añade un punto después del número
+    \fi
+    \interlinepenalty\@M
+    #1\par\nobreak
+    \vspace{10pt} % Ajusta este valor para el espacio deseado después del título del capítulo
+  }}
+\makeatother
+
+% Configura para que cada \chapter no comience en una pagina nueva
+\makeatletter
+\renewcommand\chapter{\@startsection{chapter}{0}{\z@}%
+    {-3.5ex \@plus -1ex \@minus -.2ex}%
+    {2.3ex \@plus.2ex}%
+    {\normalfont\Large\bfseries}}
+\makeatother
+
+% Configurar los colores para el código
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+% Configurar el estilo para el código
+\lstdefinestyle{mystyle}{
+  backgroundcolor=\color{backcolour},   
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{magenta},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,         
+  breaklines=true,                 
+  captionpos=b,                    
+  keepspaces=true,                 
+  numbers=left,                    
+  numbersep=5pt,                  
+  showspaces=false,                
+  showstringspaces=false,
+  showtabs=false,                  
+  tabsize=2
+}
+
+\begin{document}
+
+% Portada del informe
+\title{Primera práctica}
+\subtitle{Diseño y Análisis de Algoritmos}
+\author{Adrián Grassin Luis (alu01013494809@ull.edu.es)}
+\date{\today}
+
+\maketitle
+
+\pagestyle{empty} 
+
+\tableofcontents
+
+% Nueva página
+\cleardoublepage
+
+\pagestyle{plain} % Vuelve a activar la numeración de página
+\setcounter{page}{1} % Reinicia el contador de página a 1
+
+% Secciones del informe
+\chapter{Principios Solid}
+Los principios SOLID son un conjunto de reglas que nos ayudan a diseñar 
+una buena arquitectura de software. Estos principios fueron acuñados por 
+Robert C. Martin (Uncle Bob) a principios de la década del 2000.
+\begin{itemize}
+      \item \textbf{S}ingle Responsability Principle
+      \item \textbf{O}pen/Closed Principle
+      \item \textbf{L}iskov Substitution Principle
+      \item \textbf{I}nterface Segregation Principle
+      \item \textbf{D}ependency Inversion Principle
+\end{itemize}
+\paragraph{Single Responsability Principle\newline} 
+El objetivo del principio de responsabilidad única se basa en que cada 
+clase módulo sea responsable de una sola parte de la funcionalidad proporcionada 
+por el software y esta responsabilidad debe estar encapsulada en su totalidad 
+por la clase. Es decir, que si una clase tiene más de una responsabilidad, esta se
+debería subdividir en clases más pequeñas, cada una con su única responsabilidad haciendo que 
+la lógica se encuentre separada y sea más fácil de mantener.
+\chapter{Patrón de estrategia}
+El patrón de estrategia es un patrón de diseño de software que permite seleccionar un algoritmo
+en tiempo de ejecución. Esto se logra encapsulando cada algoritmo (estrategia) en una clase separada normalmente
+siendo esta una clase hija de una interfaz o una clase abstracta de la cual se heredan los métodos que implementan el algoritmo.
+
+Un ejemplo de este patrón podría verse en una práctica de la asignatura de \textit{Algoritmos y 
+Estructuras de Datos Avanzadas} de hace unos años en la que
+se implementaba un \textit{juego de la vida de Conway} con distintas reglas de supervivencia, nacimiento y varios tipos de mundo. 
+Al ejecutar el programa se podía elegir entre distintas reglas de supervivencia y nacimiento y distintos tipos de mundo.
+mediante el uso de punteros en el código a instancias hijas de la clase que implementaba la interfaz de reglas de supervivencia y nacimiento. 
+Un ejemplo concreto podría ser el cálculo de las celulas adyacentes de cada célula, pudiendo elegir si
+el algoritmo de cálculo de adyacencia que funcionase con un mundo ``sin bordes'' o con un mundo finito, cambiando así
+la estrategia en la que se comprobaba el entorno de la celula.
+
+\cleardoublepage
+
+\section*{Referencias}
+\begin{enumerate}
+      \item \url{https://www.freecodecamp.org/espanol/news/los-principios-solid-explicados-en-espanol/}
+      \item \url{ https://www.digitalocean.com/community/conceptual-articles/s-o-l-i-d-the-first-five-principles-of-object-oriented-design}
+      \item \url{https://www.freecodecamp.org/news/a-beginners-guide-to-the-strategy-design-pattern/}
+      \item \url{https://refactoring.guru/es/design-patterns/strategy}
+\end{enumerate}
+
+
+\end{document}

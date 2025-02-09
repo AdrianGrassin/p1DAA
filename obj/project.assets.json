@@ -1,0 +1,162 @@
+{
+  "version": 3,
+  "targets": {
+    "net8.0": {
+      "ManagedCuda-12/12.3.54": {
+        "type": "package",
+        "compile": {
+          "lib/net7.0/ManagedCuda.netCore.dll": {
+            "related": ".deps.json;.pdb;.xml"
+          }
+        },
+        "runtime": {
+          "lib/net7.0/ManagedCuda.netCore.dll": {
+            "related": ".deps.json;.pdb;.xml"
+          }
+        }
+      },
+      "OpenCL.Net/2.2.9": {
+        "type": "package",
+        "compile": {
+          "lib/net40/OpenCL.Net.dll": {}
+        },
+        "runtime": {
+          "lib/net40/OpenCL.Net.dll": {}
+        },
+        "build": {
+          "build/net40/OpenCL.Net.targets": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "ManagedCuda-12/12.3.54": {
+      "sha512": "CL0CYHyaLQJAH7YowKk7Sv+QwskWXIGrCl51HeFYkLjAD7Th8qpqTdMZSDOx6xhcXx7VIj0GTCnEfykkBqZLhQ==",
+      "type": "package",
+      "path": "managedcuda-12/12.3.54",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "doc/README.md",
+        "images/AI_128.png",
+        "lib/net48/ManagedCuda.dll",
+        "lib/net48/ManagedCuda.pdb",
+        "lib/net48/ManagedCuda.xml",
+        "lib/net6.0/ManagedCuda.netCore.deps.json",
+        "lib/net6.0/ManagedCuda.netCore.dll",
+        "lib/net6.0/ManagedCuda.netCore.pdb",
+        "lib/net6.0/ManagedCuda.netCore.xml",
+        "lib/net7.0/ManagedCuda.netCore.deps.json",
+        "lib/net7.0/ManagedCuda.netCore.dll",
+        "lib/net7.0/ManagedCuda.netCore.pdb",
+        "lib/net7.0/ManagedCuda.netCore.xml",
+        "lib/netcoreapp3.1/ManagedCuda.netCore.deps.json",
+        "lib/netcoreapp3.1/ManagedCuda.netCore.dll",
+        "lib/netcoreapp3.1/ManagedCuda.netCore.pdb",
+        "lib/netcoreapp3.1/ManagedCuda.netCore.xml",
+        "managedcuda-12.12.3.54.nupkg.sha512",
+        "managedcuda-12.nuspec"
+      ]
+    },
+    "OpenCL.Net/2.2.9": {
+      "sha512": "88xksmTwopVt7UN8Kdpry3sIKcEM5sbvIKJYYwj8MGOvnpqS50N9HaKBD/oXae/1pKyuj2/Ipo1eid7yQ18B1Q==",
+      "type": "package",
+      "path": "opencl.net/2.2.9",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "build/net40/OpenCL.Net.targets",
+        "lib/net40/OpenCL.Net.dll",
+        "opencl.net.2.2.9.nupkg.sha512",
+        "opencl.net.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "ManagedCuda-12 >= 12.3.51",
+      "OpenCL.Net >= 2.2.9"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\grass\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\grass\\Desktop\\P1\\MatrixProd\\MatrizProd.csproj",
+      "projectName": "MatrizProd",
+      "projectPath": "C:\\Users\\grass\\Desktop\\P1\\MatrixProd\\MatrizProd.csproj",
+      "packagesPath": "C:\\Users\\grass\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\grass\\Desktop\\P1\\MatrixProd\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\grass\\AppData\\Roaming\\NuGet\\NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      }
+    },
+    "frameworks": {
+      "net8.0": {
+        "targetAlias": "net8.0",
+        "dependencies": {
+          "ManagedCuda-12": {
+            "target": "Package",
+            "version": "[12.3.51, )"
+          },
+          "OpenCL.Net": {
+            "target": "Package",
+            "version": "[2.2.9, )",
+            "noWarn": [
+              "NU1701"
+            ]
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.112/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  },
+  "logs": [
+    {
+      "code": "NU1603",
+      "level": "Warning",
+      "warningLevel": 1,
+      "message": "MatrizProd depends on ManagedCuda-12 (>= 12.3.51) but ManagedCuda-12 12.3.51 was not found. An approximate best match of ManagedCuda-12 12.3.54 was resolved.",
+      "libraryId": "ManagedCuda-12",
+      "targetGraphs": [
+        "net8.0"
+      ]
+    }
+  ]
+}

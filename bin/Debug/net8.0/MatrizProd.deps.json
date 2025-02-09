@@ -1,0 +1,41 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "MatrizProd/1.0.0": {
+        "dependencies": {
+          "OpenCL.Net": "2.2.9"
+        },
+        "runtime": {
+          "MatrizProd.dll": {}
+        }
+      },
+      "OpenCL.Net/2.2.9": {
+        "runtime": {
+          "lib/net40/OpenCL.Net.dll": {
+            "assemblyVersion": "2.2.9.0",
+            "fileVersion": "2.2.9.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "MatrizProd/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "OpenCL.Net/2.2.9": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-88xksmTwopVt7UN8Kdpry3sIKcEM5sbvIKJYYwj8MGOvnpqS50N9HaKBD/oXae/1pKyuj2/Ipo1eid7yQ18B1Q==",
+      "path": "opencl.net/2.2.9",
+      "hashPath": "opencl.net.2.2.9.nupkg.sha512"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+G:\Clase\3\DAA\P1\MatrixProd\bin\Debug\net8.0\MatrixProd.exe
+G:\Clase\3\DAA\P1\MatrixProd\bin\Debug\net8.0\MatrixProd.deps.json
+G:\Clase\3\DAA\P1\MatrixProd\bin\Debug\net8.0\MatrixProd.runtimeconfig.json
+G:\Clase\3\DAA\P1\MatrixProd\bin\Debug\net8.0\MatrixProd.dll
+G:\Clase\3\DAA\P1\MatrixProd\bin\Debug\net8.0\MatrixProd.pdb
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.GeneratedMSBuildEditorConfig.editorconfig
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.AssemblyInfoInputs.cache
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.AssemblyInfo.cs
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.csproj.CoreCompileInputs.cache
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.dll
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\refint\MatrixProd.dll
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.pdb
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\MatrixProd.genruntimeconfig.cache
+G:\Clase\3\DAA\P1\MatrixProd\obj\Debug\net8.0\ref\MatrixProd.dll
