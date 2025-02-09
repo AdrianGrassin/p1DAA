@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MatrizProd")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0ae8fe7865670e301a45ce7bf963bef8da780e0d")]
 [assembly: System.Reflection.AssemblyProductAttribute("MatrizProd")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MatrizProd")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
