@@ -59,17 +59,24 @@
 
 \begin{document}
 
-\title{Análisis Comparativo de Estrategias de Multiplicación de Matrices con Aceleración GPU}
+\title{Análisis y Comparativa de Métodos de Multiplicación de Matrices}
 \author{Adrian Grassin Luis}
 \date{\today}
 \maketitle
 
 \begin{abstract}
-Este estudio analiza y compara tres estrategias diferentes para la multiplicación de matrices: multiplicación por filas, por columnas, y mediante aceleración GPU utilizando OpenCL. Se evalúa el rendimiento de los métodos utilizando matrices de diversos tamaños, con especial énfasis en matrices de gran dimensión, y se analiza el impacto de la arquitectura de memoria y el procesamiento paralelo en el rendimiento.
+Este estudio analiza la complejidad computacional y patrones de rendimiento de diferentes métodos de multiplicación de matrices, incluyendo implementaciones CPU (por filas y columnas) y GPU. Los resultados muestran una clara correlación entre el tamaño de la matriz y la eficiencia relativa de cada método, con ventajas significativas para la implementación GPU en matrices grandes.
 \end{abstract}
 
 \section{Introducción}
 La multiplicación de matrices es una operación fundamental en numerosas aplicaciones computacionales. Este trabajo examina tres implementaciones diferentes de multiplicación de matrices, incluyendo una implementación GPU que aprovecha el hardware de procesamiento paralelo moderno.
+
+\section{Análisis de Complejidad}
+Para multiplicación de matrices de tamaño N x N:
+\begin{itemize}
+    \item Complejidad clásica (Filas/Columnas): O(N³)
+    \item Complejidad GPU paralela: O(N³) operaciones totales divididas por unidades de cómputo
+\end{itemize}
 
 \section{Metodología}
 \subsection{Entorno de Pruebas}
@@ -97,6 +104,32 @@ La multiplicación de matrices es una operación fundamental en numerosas aplica
 \end{itemize}
 
 \section{Resultados y Análisis}
+\subsection{Tiempos de Ejecución}
+
+\subsubsection{Por Filas (CPU):}
+\begin{itemize}
+    \item 100x100: 6.50ms
+    \item 250x250: 54.00ms (8.3x más lento)
+    \item 500x500: 366.00ms (6.8x más lento)
+    \item 750x750: 1206.50ms (3.3x más lento)
+\end{itemize}
+
+\subsubsection{Por Columnas (CPU):}
+\begin{itemize}
+    \item 100x100: 19.00ms
+    \item 250x250: 291.00ms (15.3x más lento)
+    \item 500x500: 2306.00ms (7.9x más lento)
+    \item 750x750: 7610.50ms (3.3x más lento)
+\end{itemize}
+
+\subsubsection{GPU:}
+\begin{itemize}
+    \item 100x100: 1.00ms
+    \item 250x250: 2.00ms (2x más lento)
+    \item 500x500: 4.00ms (2x más lento)
+    \item 750x750: 8.00ms (2x más lento)
+\end{itemize}
+
 \subsection{Rendimiento Comparativo}
 \begin{table}[h]
     \centering
@@ -109,6 +142,34 @@ La multiplicación de matrices es una operación fundamental en numerosas aplica
     \includegraphics[width=0.8\textwidth]{./grafica.png}
     \caption{Comparación de rendimiento entre multiplicación por filas vs columnas vs GPU}
 \end{figure}
+
+\subsection{Análisis de Escalamiento}
+
+Para complejidad O(N³), cuando N aumenta por un factor k, el tiempo debería aumentar por k³:
+
+\subsection{Factor 2.5x (250/100):}
+\begin{itemize}
+    \item Teoría espera: 2.5³ = 15.625x más lento
+    \item Por Filas: 8.3x (menor que lo esperado)
+    \item Por Columnas: 15.3x (coincide con teoría)
+    \item GPU: 2x (eficiente debido al paralelismo)
+\end{itemize}
+
+\subsection{Factor 2x (500/250):}
+\begin{itemize}
+    \item Teoría espera: 2³ = 8x más lento
+    \item Por Filas: 6.8x (cerca de teoría)
+    \item Por Columnas: 7.9x (coincide con teoría)
+    \item GPU: 2x (eficiente debido al paralelismo)
+\end{itemize}
+
+\subsection{Factor 1.5x (750/500):}
+\begin{itemize}
+    \item Teoría espera: 1.5³ = 3.375x más lento
+    \item Por Filas: 3.3x (coincide con teoría)
+    \item Por Columnas: 3.3x (coincide con teoría)
+    \item GPU: 2x (eficiente debido al paralelismo)
+\end{itemize}
 
 \subsection{Análisis de Rendimiento}
 \subsubsection{Implementaciones CPU}
@@ -125,8 +186,43 @@ La multiplicación de matrices es una operación fundamental en numerosas aplica
     \item \textbf{Eficiencia escalar:} Mayor beneficio en matrices grandes donde el paralelismo compensa el overhead
 \end{itemize}
 
+\subsection{Explicación del Rendimiento}
+
+\subsection{Layout de Memoria}
+La clase Matrix utiliza un layout de memoria row-major (\texttt{\_data[row * \_cols + col]}), lo que implica:
+\begin{itemize}
+    \item Acceso por filas: Acceso a memoria contigua
+    \item Acceso por columnas: Acceso a memoria con saltos de \texttt{\_cols} elementos
+\end{itemize}
+
+\subsection{Patrones de Rendimiento}
+Los tiempos observados siguen el patrón esperado O(N³):
+\begin{itemize}
+    \item La multiplicación por columnas muestra un escalado teórico casi perfecto
+    \item La multiplicación por filas es más rápida debido a:
+    \begin{itemize}
+        \item Mejor utilización de caché por acceso contiguo
+        \item Prefetcher de CPU más eficiente
+        \item Menos fallos TLB (Translation Lookaside Buffer)
+    \end{itemize}
+\end{itemize}
+
+\subsection{Ratios de Velocidad}
+La diferencia relativa entre métodos por filas y columnas es consistente:
+\begin{itemize}
+    \item 100x100: Filas 2.9x más rápido
+    \item 250x250: Filas 5.4x más rápido
+    \item 500x500: Filas 6.3x más rápido
+    \item 750x750: Filas 6.3x más rápido
+\end{itemize}
+
 \section{Conclusiones}
-La implementación GPU demuestra ventajas significativas en matrices de gran tamaño, donde el paralelismo masivo compensa el overhead de transferencia de datos. Las implementaciones CPU optimizadas mantienen buena eficiencia para tamaños pequeños y medianos, especialmente la versión por filas debido a su mejor utilización de la caché.
+El rendimiento observado confirma que:
+\begin{itemize}
+    \item La multiplicación por filas no está defectuosa - muestra las características de rendimiento esperadas para una implementación row-major
+    \item La versión por columnas es más lenta debido a que trabaja contra el layout de memoria subyacente
+    \item La implementación GPU muestra ventajas significativas en matrices grandes
+\end{itemize}
 
 \section{Trabajo Futuro}
 \begin{itemize}
@@ -136,5 +232,11 @@ La implementación GPU demuestra ventajas significativas en matrices de gran tam
     \item Estudio del impacto de diferentes tamaños de grupo de trabajo en OpenCL
     \item Comparación con otras APIs de GPU como DirectCompute
 \end{itemize}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{grafica.png}
+    \caption{Comparación de rendimiento entre métodos de multiplicación}
+\end{figure}
 
 \end{document}

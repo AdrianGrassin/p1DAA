@@ -9,50 +9,40 @@ public static class MatrixMultiplicationFactory
 {
     internal static IGPUMatrixMultiplication? _gpuMultiplier;
     internal static bool _gpuInitialized;
-    private static readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
+    private static readonly SemaphoreSlim _initLock = new(1, 1);
+    private static bool _initialized;
     private static bool _initializationInProgress;
+    private static readonly Dictionary<string, IMatrixMultiplication> _multipliers = new();
 
     public static async Task<IMatrixMultiplication> CreateMultiplier(string method)
     {
+        await _initLock.WaitAsync();
         try
         {
-            // For GPU methods, wait for any ongoing initialization
-            if ((method == "g" || method == "h") && !_gpuInitialized)
+            // If we already have this multiplier initialized, return it
+            if (_multipliers.TryGetValue(method, out var existingMultiplier))
             {
-                await _initLock.WaitAsync();
-                try
-                {
-                    // Skip initialization if it's already in progress
-                    if (!_gpuInitialized && !_initializationInProgress)
-                    {
-                        // Just use what's already initialized
-                        _gpuInitialized = true;
-                    }
-                }
-                finally
-                {
-                    _initLock.Release();
-                }
+                return existingMultiplier;
             }
 
-            // Create appropriate multiplier based on method
+            // Initialize multiplier based on method
             IMatrixMultiplication multiplier = method switch
             {
-                "f" => new RowMatrixMultiplication(),
+                "f" => new MatrixFilMultiplication(),
                 "c" => new ColumnMatrixMultiplication(),
                 "g" when _gpuMultiplier != null => new GPUMatrixMultiplier(_gpuMultiplier),
-                "g" => new RowMatrixMultiplication(), // Fallback to CPU if no GPU
-                "h" => new HybridMatrixMultiplication(),
+                "h" when _gpuMultiplier != null => new HybridMatrixMultiplication(),
+                "g" or "h" => new RowMatrixMultiplication(), // Fallback to CPU if no GPU
                 _ => throw new ArgumentException($"Invalid multiplication method: {method}", nameof(method))
             };
 
+            // Cache the multiplier
+            _multipliers[method] = multiplier;
             return multiplier;
         }
-        catch (Exception ex)
+        finally
         {
-            Console.WriteLine($"Error creating matrix multiplier: {ex.Message}");
-            // Final fallback to CPU implementation
-            return new RowMatrixMultiplication();
+            _initLock.Release();
         }
     }
 

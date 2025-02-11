@@ -1,4 +1,4 @@
-\documentclass[11pt]{report}
+\documentclass[11pt]{article}
 
 % Paquetes y configuraciones adicionales
 \usepackage{graphicx}
@@ -93,66 +93,47 @@
 
 \begin{document}
 
-% Portada del informe
-\title{Primera práctica}
-\subtitle{Diseño y Análisis de Algoritmos}
-\author{Adrián Grassin Luis (alu01013494809@ull.edu.es)}
+\title{Práctica 1: Análisis de Algoritmos}
+\author{Adrián Grassin Luis}
 \date{\today}
 
 \maketitle
 
-\pagestyle{empty} 
+\section{Principios SOLID}
+Los principios SOLID son guías fundamentales para el diseño orientado a objetos que mejoran la mantenibilidad y escalabilidad del software. El principio de responsabilidad única (SRP) establece que una clase debe tener una única razón para cambiar, es decir, debe encapsular una única funcionalidad o responsabilidad del sistema.
 
-\tableofcontents
+\section{Patrón Estrategia}
+El patrón estrategia permite definir una familia de algoritmos intercambiables en tiempo de ejecución. Cada algoritmo se encapsula en una clase separada que implementa una interfaz común, permitiendo que los algoritmos varíen independientemente de los clientes que los utilizan. En esta práctica, se aplica este patrón para implementar diferentes estrategias de multiplicación de matrices.
 
-% Nueva página
-\cleardoublepage
+\section{Análisis de Algoritmos}
 
-\pagestyle{plain} % Vuelve a activar la numeración de página
-\setcounter{page}{1} % Reinicia el contador de página a 1
-
-% Secciones del informe
-\chapter{Principios Solid}
-Los principios SOLID son un conjunto de reglas que nos ayudan a diseñar 
-una buena arquitectura de software. Estos principios fueron acuñados por 
-Robert C. Martin (Uncle Bob) a principios de la década del 2000.
+\subsection{Arquitectura de Ejecución}
 \begin{itemize}
-      \item \textbf{S}ingle Responsability Principle
-      \item \textbf{O}pen/Closed Principle
-      \item \textbf{L}iskov Substitution Principle
-      \item \textbf{I}nterface Segregation Principle
-      \item \textbf{D}ependency Inversion Principle
+    \item \textbf{CPU:} AMD Ryzen 5600X (6 cores, 12 threads)
+    \item \textbf{GPU:} AMD Radeon RX 7800 XT (16GB VRAM)
+    \item \textbf{RAM:} 32GB DDR4
+    \item \textbf{Framework:} .NET 8.0
 \end{itemize}
-\paragraph{Single Responsability Principle\newline} 
-El objetivo del principio de responsabilidad única se basa en que cada 
-clase módulo sea responsable de una sola parte de la funcionalidad proporcionada 
-por el software y esta responsabilidad debe estar encapsulada en su totalidad 
-por la clase. Es decir, que si una clase tiene más de una responsabilidad, esta se
-debería subdividir en clases más pequeñas, cada una con su única responsabilidad haciendo que 
-la lógica se encuentre separada y sea más fácil de mantener.
-\chapter{Patrón de estrategia}
-El patrón de estrategia es un patrón de diseño de software que permite seleccionar un algoritmo
-en tiempo de ejecución. Esto se logra encapsulando cada algoritmo (estrategia) en una clase separada normalmente
-siendo esta una clase hija de una interfaz o una clase abstracta de la cual se heredan los métodos que implementan el algoritmo.
 
-Un ejemplo de este patrón podría verse en una práctica de la asignatura de \textit{Algoritmos y 
-Estructuras de Datos Avanzadas} de hace unos años en la que
-se implementaba un \textit{juego de la vida de Conway} con distintas reglas de supervivencia, nacimiento y varios tipos de mundo. 
-Al ejecutar el programa se podía elegir entre distintas reglas de supervivencia y nacimiento y distintos tipos de mundo.
-mediante el uso de punteros en el código a instancias hijas de la clase que implementaba la interfaz de reglas de supervivencia y nacimiento. 
-Un ejemplo concreto podría ser el cálculo de las celulas adyacentes de cada célula, pudiendo elegir si
-el algoritmo de cálculo de adyacencia que funcionase con un mundo ``sin bordes'' o con un mundo finito, cambiando así
-la estrategia en la que se comprobaba el entorno de la celula.
+\subsection{Resultados Experimentales}
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{grafica.png}
+    \caption{Comparación de rendimiento: Tiempo de computación (izq.) y GFlops (der.)}
+    \label{fig:performance}
+\end{figure}
 
-\cleardoublepage
+\subsection{Análisis y Conclusiones}
+Los resultados muestran tres comportamientos distintivos según el tamaño de las matrices:
 
-\section*{Referencias}
-\begin{enumerate}
-      \item \url{https://www.freecodecamp.org/espanol/news/los-principios-solid-explicados-en-espanol/}
-      \item \url{ https://www.digitalocean.com/community/conceptual-articles/s-o-l-i-d-the-first-five-principles-of-object-oriented-design}
-      \item \url{https://www.freecodecamp.org/news/a-beginners-guide-to-the-strategy-design-pattern/}
-      \item \url{https://refactoring.guru/es/design-patterns/strategy}
-\end{enumerate}
+\begin{itemize}
+    \item \textbf{Matrices pequeñas < (500x500):} La implementación por filas es superior debido a la mejor localidad de memoria y menor overhead. La versión por columnas muestra un rendimiento significativamente peor debido a los fallos de caché.
+    
+    \item \textbf{Matrices medianas (500x500-1000x1000):} La GPU comienza a mostrar ventajas, alcanzando hasta 105 GFlops en matrices de 750x750, comparado con 0.77 GFlops de la CPU.
+    
+    \item \textbf{Matrices grandes > (1000x1000):} La diferencia entre implementaciones se amplifica. La versión por columnas muestra el peor rendimiento (0.11 GFlops), mientras que la GPU mantiene un rendimiento superior (11-129 GFlops).
+\end{itemize}
 
+La implementación por filas supera consistentemente a la versión por columnas debido a la arquitectura de memoria de la CPU, que favorece accesos secuenciales. La GPU muestra una clara ventaja en matrices grandes debido a su capacidad de procesamiento paralelo masivo.
 
 \end{document}

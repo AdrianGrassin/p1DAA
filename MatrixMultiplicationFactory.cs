@@ -74,49 +74,42 @@ public static class MatrixMultiplicationFactory
 {
     internal static IGPUMatrixMultiplication? _gpuMultiplier;
     internal static bool _gpuInitialized;
-    private static readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
+    private static readonly SemaphoreSlim _initLock = new(1, 1);
+    private static bool _initialized;
+    private static readonly Dictionary<string, IMatrixMultiplication> _multipliers = new();
 
     public static async Task<IMatrixMultiplication> CreateMultiplier(string method)
     {
         try
         {
-            // For GPU methods, we'll use the already initialized GPU if available
-            if ((method == "g" || method == "h") && !MatrixMultiplicationFactory._gpuInitialized)
+            await _initLock.WaitAsync();
+            try
             {
-                await MatrixMultiplicationFactory._initLock.WaitAsync();
-                try
+                // Check if this method is already initialized
+                if (_multipliers.TryGetValue(method, out var existingMultiplier))
                 {
-                    if (!MatrixMultiplicationFactory._gpuInitialized)
-                    {
-                        // Instead of detecting again, we'll check if _gpuMultiplier is already initialized
-                        if (MatrixMultiplicationFactory._gpuMultiplier == null)
-                        {
-                            // If not initialized and it's null, we'll fallback to CPU
-                            Console.WriteLine("No GPU initialized. Using CPU implementation.");
-                            method = "f"; // Fallback to CPU
-                        }
-                        MatrixMultiplicationFactory._gpuInitialized = true;
-                    }
+                    return existingMultiplier;
                 }
-                finally
+
+                // Create appropriate multiplier based on method
+                IMatrixMultiplication multiplier = method switch
                 {
-                    MatrixMultiplicationFactory._initLock.Release();
-                }
+                    "f" => new MatrixFilMultiplication(),
+                    "c" => new MatrixColMultiplication(),
+                    "g" when _gpuMultiplier != null => new GPUMatrixMultiplier(_gpuMultiplier),
+                    "g" => new MatrixFilMultiplication(), // Fallback to CPU if no GPU
+                    "h" => new HybridMatrixMultiplication(),
+                    _ => throw new ArgumentException($"Invalid multiplication method: {method}", nameof(method))
+                };
+
+                _multipliers[method] = multiplier;
+                Console.WriteLine($"Created multiplier for method: {method}");
+                return multiplier;
             }
-
-            // Create appropriate multiplier based on method
-            IMatrixMultiplication multiplier = method switch
+            finally
             {
-                "f" => new MatrixFilMultiplication(),
-                "c" => new MatrixColMultiplication(),
-                "g" when MatrixMultiplicationFactory._gpuMultiplier != null => new GPUMatrixMultiplier(MatrixMultiplicationFactory._gpuMultiplier),
-                "g" => new MatrixFilMultiplication(), // Fallback to CPU if no GPU
-                "h" => new HybridMatrixMultiplication(),
-                _ => throw new ArgumentException($"Invalid multiplication method: {method}", nameof(method))
-            };
-
-            Console.WriteLine($"Created multiplier for method: {method}");
-            return multiplier;
+                _initLock.Release();
+            }
         }
         catch (Exception ex)
         {
@@ -128,49 +121,53 @@ public static class MatrixMultiplicationFactory
 
     internal static async Task<IGPUMatrixMultiplication?> DetectAndInitializeGPU()
     {
-        // Try AMD first since it was detected in the environment
+        if (_initialized) return _gpuMultiplier;
+
+        await _initLock.WaitAsync();
         try
         {
+            if (_initialized) return _gpuMultiplier;
+
+            // Try AMD first since it was detected in the environment
             Console.WriteLine("Attempting to initialize AMD GPU...");
-            var amdImpl = new AmdImplementation();
+            var amdImpl = new AmdImplementation(printWorkGroupInfo: true);
             await amdImpl.Device.Initialize();
             if (amdImpl.Device.IsAvailable)
             {
-                await Task.Delay(100); // Give the GPU initialization time to settle
+                await Task.Delay(100);
                 Console.WriteLine("AMD GPU initialized successfully");
+                _initialized = true;
                 return amdImpl;
             }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"AMD GPU initialization failed: {ex.Message}");
-        }
 
-        // Then try NVIDIA
-        try
-        {
+            // Then try NVIDIA
             Console.WriteLine("Attempting to initialize NVIDIA GPU...");
             var nvidiaImpl = new NvidiaImplementation();
             await nvidiaImpl.Device.Initialize();
             if (nvidiaImpl.Device.IsAvailable)
             {
-                await Task.Delay(100); // Give the GPU initialization time to settle
+                await Task.Delay(100);
                 Console.WriteLine("NVIDIA GPU initialized successfully");
+                _initialized = true;
                 return nvidiaImpl;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"NVIDIA GPU initialization failed: {ex.Message}");
+            Console.WriteLine($"GPU initialization failed: {ex.Message}");
+        }
+        finally
+        {
+            _initLock.Release();
         }
 
-        await Task.Delay(10); // Small delay before returning null to ensure proper async behavior
+        _initialized = true;
         return null;
     }
     
     public static void Cleanup()
     {
-        if (MatrixMultiplicationFactory._gpuMultiplier is IDisposable disposable)
+        if (_gpuMultiplier is IDisposable disposable)
         {
             try
             {
@@ -181,9 +178,27 @@ public static class MatrixMultiplicationFactory
                 Console.WriteLine($"Error during GPU cleanup: {ex.Message}");
             }
         }
-        MatrixMultiplicationFactory._gpuMultiplier = null;
-        MatrixMultiplicationFactory._gpuInitialized = false;
-        MatrixMultiplicationFactory._initLock.Dispose();
+
+        foreach (var multiplier in _multipliers.Values)
+        {
+            if (multiplier is IDisposable disposableMultiplier)
+            {
+                try
+                {
+                    disposableMultiplier.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during multiplier cleanup: {ex.Message}");
+                }
+            }
+        }
+
+        _multipliers.Clear();
+        _gpuMultiplier = null;
+        _gpuInitialized = false;
+        _initialized = false;
+        _initLock.Dispose();
     }
 }
 

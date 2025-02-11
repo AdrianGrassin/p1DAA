@@ -430,7 +430,84 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
         return MultiplyImpl(m1, m2, false);
     }
 
-    private unsafe Task<IMatrix> MultiplyImpl(IMatrix m1, IMatrix m2, bool useColumns = false)
+    private async Task<IMatrix> ProcessInChunks(IMatrix m1, IMatrix m2, int chunkSize, bool useColumns)
+    {
+        var result = new Matrix(m1.GetRows(), m2.GetCols());
+        int numChunksM = (m1.GetRows() + chunkSize - 1) / chunkSize;
+        int numChunksN = (m2.GetCols() + chunkSize - 1) / chunkSize;
+
+        // Use semaphore to control memory pressure
+        using var semaphore = new SemaphoreSlim(2); // Allow 2 concurrent chunks
+
+        for (int i = 0; i < numChunksM; i++)
+        {
+            int startM = i * chunkSize;
+            int rowCount = Math.Min(chunkSize, m1.GetRows() - startM);
+
+            for (int j = 0; j < numChunksN; j++)
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    int startN = j * chunkSize;
+                    int colCount = Math.Min(chunkSize, m2.GetCols() - startN);
+
+                    // Pre-allocate sub-matrices with exact sizes
+                    var subM1 = new Matrix(rowCount, m1.GetCols());
+                    var subM2 = new Matrix(m2.GetRows(), colCount);
+
+                    // Parallel copy for better performance
+                    Parallel.For(0, rowCount, r =>
+                    {
+                        for (int c = 0; c < m1.GetCols(); c++)
+                        {
+                            subM1.Set(r, c, m1.Get(startM + r, c));
+                        }
+                    });
+
+                    Parallel.For(0, m2.GetRows(), r =>
+                    {
+                        for (int c = 0; c < colCount; c++)
+                        {
+                            subM2.Set(r, c, m2.Get(r, startN + c));
+                        }
+                    });
+
+                    // Process chunk
+                    var subResult = await MultiplyImpl(subM1, subM2, useColumns);
+
+                    // Copy results back
+                    Parallel.For(0, rowCount, r =>
+                    {
+                        for (int c = 0; c < colCount; c++)
+                        {
+                            result.Set(startM + r, startN + c, subResult.Get(r, c));
+                        }
+                    });
+
+                    // Immediate cleanup
+                    (subM1 as IDisposable)?.Dispose();
+                    (subM2 as IDisposable)?.Dispose();
+                    (subResult as IDisposable)?.Dispose();
+
+                    // Force GC after each chunk for large matrices
+                    if (m1.GetRows() >= 1500)
+                    {
+                        GC.Collect(1, GCCollectionMode.Forced);
+                        await Task.Delay(50);
+                    }
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<IMatrix> MultiplyImpl(IMatrix m1, IMatrix m2, bool useColumns = false)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(AmdImplementation));
         if (_program == null) throw new InvalidOperationException("OpenCL program not initialized");
@@ -442,11 +519,28 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
             throw new ArgumentException($"Matrix dimensions exceed maximum safe size of {MAX_MATRIX_SIZE}");
         }
 
-        // Skip GPU for small matrices - use CPU instead
-        if (m1.GetRows() <= SMALL_MATRIX_THRESHOLD || m2.GetCols() <= SMALL_MATRIX_THRESHOLD)
+        // Calculate memory requirements
+        long requiredMemory = (long)m1.GetRows() * m1.GetCols() * sizeof(int) +
+                            (long)m2.GetRows() * m2.GetCols() * sizeof(int) +
+                            (long)m1.GetRows() * m2.GetCols() * sizeof(int);
+
+        // Get available GPU memory
+        ErrorCode error;
+        var globalMemSize = Cl.GetDeviceInfo(_device, DeviceInfo.GlobalMemSize, out error).CastTo<ulong>();
+        if (error != ErrorCode.Success)
         {
-            using var cpuMultiplier = new RowMatrixMultiplication();
-            return cpuMultiplier.Multiply(m1, m2);
+            throw new InvalidOperationException("Failed to get GPU memory size");
+        }
+
+        // Use only 75% of available memory to be safe
+        long availableMemory = (long)(globalMemSize * 0.75);
+
+        // If memory requirements exceed available memory or matrix is large, process in chunks
+        if (requiredMemory > availableMemory || m1.GetRows() >= 1500)
+        {
+            int chunkSize = (int)Math.Sqrt((availableMemory / (3 * sizeof(int))));
+            chunkSize = Math.Min(chunkSize, 512); // Cap chunk size
+            return await ProcessInChunks(m1, m2, chunkSize, useColumns);
         }
 
         int retryCount = 0;
@@ -468,7 +562,7 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                 _K = m1.GetCols();
                 _method = useColumns ? 1 : 0;
 
-                return Task.Run<IMatrix>(() =>
+                var computeTask = Task.Run(() =>
                 {
                     ErrorCode error;
                     IMatrix? result = null;
@@ -476,61 +570,57 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
 
                     try
                     {
-                        // Calculate optimal work group size based on device limits
+                        // Calculate optimal work group size
                         var maxWorkGroupSize = Cl.GetDeviceInfo(_device, DeviceInfo.MaxWorkGroupSize, out error).CastTo<IntPtr>();
                         if (error != ErrorCode.Success)
                             throw new InvalidOperationException($"Failed to get device work group size: {error}");
 
-                        // Calculate optimal work group dimensions with conservative limits
-                        int workGroupSize = (int)Math.Sqrt(Math.Min(maxWorkGroupSize.ToInt64(), MAX_WORK_GROUP_SIZE));
-                        workGroupSize = Math.Min(workGroupSize, OPTIMAL_BLOCK_SIZE);
-                        
-                        // Ensure work group size is a power of 2
-                        workGroupSize = (int)Math.Pow(2, Math.Floor(Math.Log(workGroupSize, 2)));
-
-                        // Force smaller work groups for large matrices
-                        if (_M > 500 || _N > 500)
+                        // Adjust work group size based on matrix dimensions
+                        int baseWorkGroupSize = 16;
+                        if (_M >= 1000 || _N >= 1000)
                         {
-                            workGroupSize = Math.Min(workGroupSize, 8);
+                            baseWorkGroupSize = 8;
+                        }
+                        else if (_M >= 500 || _N >= 500)
+                        {
+                            baseWorkGroupSize = 12;
                         }
 
-                        int localWorkSizeX = workGroupSize;
-                        int localWorkSizeY = workGroupSize;
-
-                        // Calculate padded dimensions for better alignment
-                        int globalWorkSizeM = ((_M + localWorkSizeX - 1) / localWorkSizeX) * localWorkSizeX;
-                        int globalWorkSizeN = ((_N + localWorkSizeY - 1) / localWorkSizeY) * localWorkSizeY;
-
-                        if (_printWorkGroupInfo) 
+                        int workGroupSize = Math.Min(baseWorkGroupSize, (int)Math.Sqrt(maxWorkGroupSize.ToInt64()));
+                        
+                        if (_printWorkGroupInfo)
                         {
                             Console.WriteLine($"Matrix dimensions: {_M}x{_N}");
-                            Console.WriteLine($"Work group size: {localWorkSizeX}x{localWorkSizeY}");
-                            Console.WriteLine($"Global work size: {globalWorkSizeM}x{globalWorkSizeN}");
+                            Console.WriteLine($"Work group size: {workGroupSize}x{workGroupSize}");
                         }
 
-                        // Split matrices into chunks if they're too large
-                        int chunkRows = Math.Min(_M, MEMORY_CHUNK_SIZE / (_K * sizeof(int)));
-                        chunkRows = Math.Min(chunkRows, 256); // Additional limit for very large matrices
-                        int numChunks = (_M + chunkRows - 1) / chunkRows;
+                        // Calculate global work size with padding
+                        int globalSizeM = ((_M + workGroupSize - 1) / workGroupSize) * workGroupSize;
+                        int globalSizeN = ((_N + workGroupSize - 1) / workGroupSize) * workGroupSize;
+
+                        if (_printWorkGroupInfo)
+                        {
+                            Console.WriteLine($"Global work size: {globalSizeM}x{globalSizeN}");
+                        }
 
                         result = new Matrix(_M, _N);
 
-                        for (int chunk = 0; chunk < numChunks; chunk++)
+                        // Create buffers with pinned memory and specific flags
+                        IMem? bufferA = null, bufferB = null, bufferC = null;
+                        Kernel? kernel = null;
+
+                        try
                         {
-                            int startRow = chunk * chunkRows;
-                            int rowCount = Math.Min(chunkRows, _M - startRow);
-
-                            // Allocate memory for this chunk
-                            int[] dataA = new int[rowCount * _K];
+                            int[] dataA = new int[_M * _K];
                             int[] dataB = new int[_K * _N];
-                            int[] dataC = new int[rowCount * _N];
+                            int[] dataC = new int[_M * _N];
 
-                            // Copy input data for this chunk
-                            Parallel.For(0, rowCount, i =>
+                            // Copy input data
+                            Parallel.For(0, _M, i =>
                             {
                                 for (int j = 0; j < _K; j++)
                                 {
-                                    dataA[i * _K + j] = m1.Get(startRow + i, j);
+                                    dataA[i * _K + j] = m1.Get(i, j);
                                 }
                             });
 
@@ -542,21 +632,17 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                                 }
                             });
 
-                            fixed (int* ptrA = dataA, ptrB = dataB, ptrC = dataC)
+                            unsafe
                             {
-                                // Create buffers with error checking
-                                IMem? bufferA = null, bufferB = null, bufferC = null;
-                                Kernel? kernel = null;
-
-                                try
+                                fixed (int* ptrA = dataA, ptrB = dataB, ptrC = dataC)
                                 {
-                                    // Create buffers with pinned memory
-                                    bufferA = Cl.CreateBuffer(_context, MemFlags.ReadOnly | MemFlags.CopyHostPtr | MemFlags.AllocHostPtr,
+                                    // Create buffers with optimal flags
+                                    bufferA = Cl.CreateBuffer(_context, MemFlags.ReadOnly | MemFlags.UseHostPtr,
                                         (IntPtr)(sizeof(int) * dataA.Length), (IntPtr)ptrA, out error);
                                     if (error != ErrorCode.Success)
                                         throw new InvalidOperationException($"Failed to create buffer A: {error}");
 
-                                    bufferB = Cl.CreateBuffer(_context, MemFlags.ReadOnly | MemFlags.CopyHostPtr | MemFlags.AllocHostPtr,
+                                    bufferB = Cl.CreateBuffer(_context, MemFlags.ReadOnly | MemFlags.UseHostPtr,
                                         (IntPtr)(sizeof(int) * dataB.Length), (IntPtr)ptrB, out error);
                                     if (error != ErrorCode.Success)
                                         throw new InvalidOperationException($"Failed to create buffer B: {error}");
@@ -566,7 +652,7 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                                     if (error != ErrorCode.Success)
                                         throw new InvalidOperationException($"Failed to create buffer C: {error}");
 
-                                    // Create and configure kernel
+                                    // Create and set up kernel
                                     kernel = Cl.CreateKernel(_program.Value, "matrix_multiply", out error);
                                     if (error != ErrorCode.Success)
                                         throw new InvalidOperationException($"Failed to create kernel: {error}");
@@ -574,68 +660,50 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                                     error = Cl.SetKernelArg(kernel.Value, 0, bufferA);
                                     error |= Cl.SetKernelArg(kernel.Value, 1, bufferB);
                                     error |= Cl.SetKernelArg(kernel.Value, 2, bufferC);
-                                    
-                                    // Replace fixed block with temporary locals to resolve CS0213
-                                    int tempRowCount = rowCount;
-                                    int tempN = _N;
-                                    int tempK = _K;
-                                    int tempMethod = _method;
-                                    error |= Cl.SetKernelArg(kernel.Value, 3, sizeof(int), (IntPtr)(&tempRowCount));
-                                    error |= Cl.SetKernelArg(kernel.Value, 4, sizeof(int), (IntPtr)(&tempN));
-                                    error |= Cl.SetKernelArg(kernel.Value, 5, sizeof(int), (IntPtr)(&tempK));
-                                    error |= Cl.SetKernelArg(kernel.Value, 6, sizeof(int), (IntPtr)(&tempMethod));
+                                    error |= Cl.SetKernelArg(kernel.Value, 3, _M);
+                                    error |= Cl.SetKernelArg(kernel.Value, 4, _N);
+                                    error |= Cl.SetKernelArg(kernel.Value, 5, _K);
+                                    error |= Cl.SetKernelArg(kernel.Value, 6, _method);
 
                                     if (error != ErrorCode.Success)
                                         throw new InvalidOperationException($"Failed to set kernel arguments: {error}");
 
-                                    // Execute kernel for this chunk
-                                    var localWorkSize = new[] { new IntPtr(localWorkSizeX), new IntPtr(localWorkSizeY) };
-                                    var globalWorkSize = new[] 
-                                    { 
-                                        new IntPtr(((rowCount + localWorkSizeX - 1) / localWorkSizeX) * localWorkSizeX),
-                                        new IntPtr(globalWorkSizeN)
-                                    };
+                                    // Execute kernel
+                                    Event evnt;
+                                    error = Cl.EnqueueNDRangeKernel(_queue, kernel.Value, 2, null,
+                                        new[] { (IntPtr)_M, (IntPtr)_N },
+                                        new[] { (IntPtr)workGroupSize, (IntPtr)workGroupSize },
+                                        0, null, out evnt);
 
-                                    Event evt;
-                                    error = Cl.EnqueueNDRangeKernel(_queue, kernel.Value, 2, null, globalWorkSize, localWorkSize, 0, null, out evt);
                                     if (error != ErrorCode.Success)
-                                        throw new InvalidOperationException($"Failed to enqueue kernel: {error}");
+                                        throw new InvalidOperationException($"Failed to execute kernel: {error}");
 
-                                    // Read results for this chunk
+                                    // Read back results (using correct Bool initialization)
                                     error = Cl.EnqueueReadBuffer(_queue, bufferC, Bool.True, IntPtr.Zero,
-                                        (IntPtr)(sizeof(int) * dataC.Length), (IntPtr)ptrC, 0, null, out evt);
-                                    if (error != ErrorCode.Success)
-                                        throw new InvalidOperationException($"Failed to read result buffer: {error}");
+                                        (IntPtr)(sizeof(int) * dataC.Length), (IntPtr)ptrC,
+                                        0, null, out evnt);
 
-                                    error = Cl.Finish(_queue);
                                     if (error != ErrorCode.Success)
-                                        throw new InvalidOperationException($"Failed to finish command queue: {error}");
+                                        throw new InvalidOperationException($"Failed to read results: {error}");
 
-                                    // Copy chunk results to final matrix
-                                    Parallel.For(0, rowCount, i =>
+                                    // Copy results to output matrix
+                                    Parallel.For(0, _M, i =>
                                     {
                                         for (int j = 0; j < _N; j++)
                                         {
-                                            result.Set(startRow + i, j, dataC[i * _N + j]);
+                                            result.Set(i, j, dataC[i * _N + j]);
                                         }
                                     });
                                 }
-                                finally
-                                {
-                                    // Cleanup resources for this chunk
-                                    if (kernel.HasValue) Cl.ReleaseKernel(kernel.Value);
-                                    if (bufferC != null) Cl.ReleaseMemObject(bufferC);
-                                    if (bufferB != null) Cl.ReleaseMemObject(bufferB);
-                                    if (bufferA != null) Cl.ReleaseMemObject(bufferA);
-                                }
                             }
-
-                            // Force GC between chunks
-                            GC.Collect(0, GCCollectionMode.Forced);
-                            Thread.Sleep(100); // 100ms cooldown
-
-                            // Add extra delay for GPU cool-down
-                            Thread.Sleep(50);
+                        }
+                        finally
+                        {
+                            // Cleanup resources
+                            if (kernel.HasValue) Cl.ReleaseKernel(kernel.Value);
+                            if (bufferC != null) Cl.ReleaseMemObject(bufferC);
+                            if (bufferB != null) Cl.ReleaseMemObject(bufferB);
+                            if (bufferA != null) Cl.ReleaseMemObject(bufferA);
                         }
 
                         success = true;
@@ -651,6 +719,8 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                         throw;
                     }
                 });
+
+                return await computeTask;
             }
             catch (Exception ex)
             {
@@ -658,8 +728,11 @@ public class AmdImplementation : IGPUMatrixMultiplication, IDisposable
                 retryCount++;
                 if (retryCount < MAX_RETRIES)
                 {
-                    Console.WriteLine($"Attempt {retryCount} failed, retrying...");
-                    Thread.Sleep(500 * retryCount); // Increasing delay between retries
+                    if (_printWorkGroupInfo)
+                    {
+                        Console.WriteLine($"Attempt {retryCount} failed, retrying...");
+                    }
+                    Thread.Sleep(500 * retryCount);
                     continue;
                 }
                 throw new InvalidOperationException("GPU multiplication failed after multiple attempts", lastException);

@@ -16,19 +16,21 @@ namespace MatrixProd
 
     class Program
     {
-        // Reduce sizes to prevent memory pressure
-        static readonly int[] CSV_SIZES = { 100, 250, 500, 1000 };
+        // Reduce matrix sizes and increase delays for stability
+        static readonly int[] CSV_SIZES = { 100, 250, 500, 750, 1000, 1250, 1500, 1850 }; // Added larger sizes
         static readonly int ITERATIONS = 2;
-        static readonly int[] BENCHMARK_SIZES = { 100, 250, 500, 750, 1000 };
-        static readonly int WARMUP_ITERATIONS = 1;
+        static readonly int[] BENCHMARK_SIZES = { 100, 250, 500, 750, 1000, 1250, 1500, 1850 }; // Added larger sizes
         static readonly int BENCHMARK_ITERATIONS = 2;
         private static readonly Dictionary<string, IMatrixMultiplication> _multipliers = new();
 
-        // Safety limits
-        private const int MIN_DELAY_MS = 500; // Increased delay between operations
-        private const int MAX_MATRIX_SIZE = 2500;
-        private const int MAX_PARALLEL_TASKS = 2; // Limit parallel operations
+        // Adjusted delays for better performance
+        private const int MIN_DELAY_MS = 500; // Reduced from 2000ms
+        private const int COOLDOWN_FACTOR = 2; // For larger matrices
+        private const int MAX_MATRIX_SIZE = 2000;
+        private const int MAX_PARALLEL_TASKS = 1; // Reduced to 1 for stability
         private static readonly SemaphoreSlim _throttle = new(MAX_PARALLEL_TASKS);
+        private static readonly SemaphoreSlim _initLock = new(1, 1);
+        private static bool _initialized = false;
 
         static async Task<(double computeTime, double totalTime)> RunBenchmark(int matrixSize, string method)
         {
@@ -84,17 +86,37 @@ namespace MatrixProd
 
         static async Task<(double computeTime, double totalTime, double memory)> RunDetailedBenchmark(int matrixSize, string method)
         {
-            var m1 = new Matriz(matrixSize, matrixSize);
-            var m2 = new Matriz(matrixSize, matrixSize);
-            var timeoutTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // 5-minute timeout
-
+            // Increase timeout for larger matrices
+            int timeoutMinutes = matrixSize >= 1500 ? 10 : 5;
+            using var timeoutTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
             try
             {
-                // Initialize matrices in parallel
-                Parallel.Invoke(
-                    () => m1.SetRandoms(),
-                    () => m2.SetRandoms()
-                );
+                // Adjust cooldown based on matrix size exponentially
+                int cooldownDelay = Math.Min(MIN_DELAY_MS * 2, 
+                    100 + (int)(Math.Pow(matrixSize / 200.0, 1.5) * 100));
+                
+                // More aggressive GC for larger matrices
+                if (matrixSize >= 1500)
+                {
+                    GC.Collect(2, GCCollectionMode.Forced, true, true);
+                    await Task.Delay(cooldownDelay * 2);
+                }
+                else
+                {
+                    GC.Collect(2, GCCollectionMode.Forced);
+                    await Task.Delay(cooldownDelay);
+                }
+
+                var m1 = new Matriz(matrixSize, matrixSize);
+                var m2 = new Matriz(matrixSize, matrixSize);
+
+                // Sequential initialization with progress tracking
+                Console.Write("Initializing matrices... ");
+                m1.SetRandoms();
+                await Task.Delay(50);
+                m2.SetRandoms();
+                await Task.Delay(50);
+                Console.WriteLine("Done");
 
                 long computeTimeTotal = 0;
                 var totalStopwatch = new Stopwatch();
@@ -107,17 +129,13 @@ namespace MatrixProd
                 if (multiplier == null)
                     throw new InvalidOperationException($"Multiplier for method {method} not initialized");
 
-                // Warmup phase with timeout protection
-                for (int i = 0; i < WARMUP_ITERATIONS; i++)
-                {
-                    await Task.WhenAny(
-                        multiplier.Multiply(m1, m2),
-                        Task.Delay(-1, timeoutTokenSource.Token)
-                    );
-
-                    if (timeoutTokenSource.Token.IsCancellationRequested)
-                        throw new TimeoutException("Warmup phase timed out");
-                }
+                // Warmup with size-based cooling
+                Console.Write("Warming up... ");
+                await multiplier.Multiply(m1, m2);
+                Console.WriteLine("Done");
+                
+                GC.Collect(1, GCCollectionMode.Forced);
+                await Task.Delay(cooldownDelay);
 
                 // Actual benchmark runs
                 for (int i = 0; i < BENCHMARK_ITERATIONS; i++)
@@ -125,18 +143,37 @@ namespace MatrixProd
                     if (timeoutTokenSource.Token.IsCancellationRequested)
                         throw new TimeoutException("Benchmark timed out");
 
-                    GC.Collect(0, GCCollectionMode.Forced);
-                    await Task.Delay(10); // Short delay between iterations
-
                     computeStopwatch.Restart();
-                    await multiplier.Multiply(m1, m2);
+                    var result = await multiplier.Multiply(m1, m2);
                     computeStopwatch.Stop();
                     computeTimeTotal += computeStopwatch.ElapsedMilliseconds;
+
+                    if (result is IDisposable disposableResult)
+                    {
+                        disposableResult.Dispose();
+                    }
+                    result = null;
+                    
+                    // Adaptive cleanup between iterations
+                    if (matrixSize >= 1500)
+                    {
+                        GC.Collect(2, GCCollectionMode.Forced, true, true);
+                        await Task.Delay(cooldownDelay * 2);
+                    }
+                    else if (matrixSize > 500)
+                    {
+                        GC.Collect(1, GCCollectionMode.Forced);
+                        await Task.Delay(cooldownDelay);
+                    }
+                    else
+                    {
+                        await Task.Delay(cooldownDelay / 2);
+                    }
                 }
 
                 totalStopwatch.Stop();
                 long memoryAfter = GC.GetTotalMemory(false);
-                double memoryUsed = (memoryAfter - memoryBefore) / (1024.0 * 1024.0); // MB
+                double memoryUsed = (memoryAfter - memoryBefore) / (1024.0 * 1024.0);
 
                 return (
                     computeTimeTotal / (double)BENCHMARK_ITERATIONS,
@@ -146,7 +183,8 @@ namespace MatrixProd
             }
             catch (Exception)
             {
-                timeoutTokenSource.Cancel(); // Ensure cleanup
+                // Ensure thorough cleanup on error
+                GC.Collect(2, GCCollectionMode.Forced, true, true);
                 throw;
             }
             finally
@@ -210,40 +248,63 @@ namespace MatrixProd
             Console.WriteLine($"\n\nResults saved to {filename}");
         }
 
+        static async Task InitializeMultipliers()
+        {
+            await _initLock.WaitAsync();
+            try
+            {
+                if (_initialized) return;
+
+                // Initialize GPU first if available
+                if (!MatrixMultiplicationFactory._gpuInitialized)
+                {
+                    var gpu = await MatrixMultiplicationFactory.DetectAndInitializeGPU();
+                    if (gpu != null)
+                    {
+                        MatrixMultiplicationFactory._gpuMultiplier = gpu;
+                        MatrixMultiplicationFactory._gpuInitialized = true;
+                    }
+                }
+
+                // Pre-initialize all multipliers
+                foreach (var method in new[] { "f", "c", "g", "h" })
+                {
+                    try 
+                    {
+                        var multiplier = await MatrixMultiplicationFactory.CreateMultiplier(method);
+                        _multipliers[method] = multiplier;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to initialize multiplier for method {method}: {ex.Message}");
+                    }
+                }
+
+                _initialized = true;
+            }
+            finally
+            {
+                _initLock.Release();
+            }
+        }
+
         static async Task RunDetailedBenchmarks()
         {
             try
             {
-                Console.WriteLine("Initializing GPU support...");
-                
-                // Pre-initialize multipliers one at a time
-                var methods = new[] { "f", "c", "g", "h" };
-                foreach (var method in methods)
-                {
-                    try
-                    {
-                        if (!_multipliers.ContainsKey(method))
-                        {
-                            _multipliers[method] = await MatrixMultiplicationFactory.CreateMultiplier(method);
-                            await Task.Delay(MIN_DELAY_MS);
-                            GC.Collect();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Warning: Failed to initialize {method} multiplier: {ex.Message}");
-                    }
-                }
+                await InitializeMultipliers();
 
-                string filename = "benchmark_results_detailed.csv";
+                string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "benchmark_results_detailed.csv");
                 var progressCount = 0;
-                var totalBenchmarks = BENCHMARK_SIZES.Length;
+                var totalBenchmarks = BENCHMARK_SIZES.Length * 4;
+                
+                Console.WriteLine($"Starting detailed benchmarks, saving to: {filename}");
                 
                 using (StreamWriter writer = new StreamWriter(filename))
                 {
                     writer.WriteLine("Size,Method,Compute Time (ms),Total Time (ms),Memory Usage (MB),GFlops");
+                    writer.Flush();
 
-                    // Process one size at a time
                     foreach (var size in BENCHMARK_SIZES)
                     {
                         if (size > MAX_MATRIX_SIZE)
@@ -252,13 +313,30 @@ namespace MatrixProd
                             continue;
                         }
 
-                        progressCount++;
+                        // Exponential delay scaling for larger matrices
+                        int currentDelay = (int)(200 * Math.Pow(1.5, Math.Max(0, (size - 500) / 250)));
+                        
                         Console.WriteLine($"\nRunning benchmarks for {size}x{size} matrices... ({progressCount}/{totalBenchmarks})");
+                        
+                        // More thorough cleanup for larger matrices
+                        if (size >= 1500)
+                        {
+                            GC.Collect(2, GCCollectionMode.Forced, true, true);
+                            await Task.Delay(currentDelay * 3);
+                        }
+                        else
+                        {
+                            GC.Collect(2, GCCollectionMode.Forced);
+                            await Task.Delay(currentDelay * 2);
+                        }
 
-                        foreach (var method in methods)
+                        foreach (var method in new[] { "f", "c", "g", "h" })
                         {
                             if (!_multipliers.ContainsKey(method))
+                            {
+                                Console.WriteLine($"Warning: Multiplier for method {method} not available, skipping...");
                                 continue;
+                            }
 
                             string methodName = method switch
                             {
@@ -271,36 +349,62 @@ namespace MatrixProd
 
                             try
                             {
+                                Console.WriteLine($"Running {methodName} benchmark...");
+                                
+                                // Extra cooldown for GPU methods or large matrices
+                                if (method is "g" or "h" || size >= 1500)
+                                {
+                                    await Task.Delay(currentDelay * 2);
+                                }
+
                                 var (computeTime, totalTime, memory) = await RunDetailedBenchmark(size, method);
                                 double operations = 2.0 * Math.Pow(size, 3);
                                 double gflops = (operations / computeTime) / 1_000_000.0;
 
-                                writer.WriteLine($"{size},{methodName},{computeTime:F2},{totalTime:F2},{memory:F2},{gflops:F2}");
-                                Console.WriteLine($"{methodName,-15}: Compute: {computeTime,8:F2}ms, Total: {totalTime,8:F2}ms, {gflops,6:F2} GFlops");
+                                var resultLine = $"{size},{methodName},{computeTime:F2},{totalTime:F2},{memory:F2},{gflops:F2}";
+                                writer.WriteLine(resultLine);
+                                writer.Flush();
                                 
-                                // Increased cooldown between methods
-                                GC.Collect();
-                                await Task.Delay(MIN_DELAY_MS * 2);
+                                Console.WriteLine($"{methodName,-15}: Compute: {computeTime,8:F2}ms, Total: {totalTime,8:F2}ms, {gflops,6:F2} GFlops");
+                                progressCount++;
+                                
+                                // Adaptive cooldown between methods
+                                if (size >= 1500)
+                                {
+                                    GC.Collect(2, GCCollectionMode.Forced, true, true);
+                                    await Task.Delay(currentDelay * 2);
+                                }
+                                else
+                                {
+                                    GC.Collect(1, GCCollectionMode.Forced);
+                                    await Task.Delay(currentDelay);
+                                }
                             }
                             catch (Exception ex)
                             {
-                                writer.WriteLine($"{size},{methodName},Error,Error,Error,Error");
-                                Console.WriteLine($"{methodName,-15}: Error - {ex.Message}");
+                                var errorLine = $"{size},{methodName},Error,Error,Error,Error";
+                                writer.WriteLine(errorLine);
+                                writer.Flush();
+                                Console.WriteLine($"Error running {methodName}: {ex.Message}");
                                 
-                                // Extra delay after error
-                                await Task.Delay(MIN_DELAY_MS * 3);
+                                // Extra cleanup and delay after error
+                                GC.Collect(2, GCCollectionMode.Forced, true, true);
+                                await Task.Delay(currentDelay * 3);
                             }
                         }
 
-                        // Much longer cooldown between sizes
-                        GC.Collect(2, GCCollectionMode.Forced);
-                        await Task.Delay(MIN_DELAY_MS * 4);
+                        // Thorough cleanup between sizes
+                        GC.Collect(2, GCCollectionMode.Forced, true, true);
+                        await Task.Delay(currentDelay * 4);
                     }
                 }
 
                 Console.WriteLine($"\nDetailed benchmark results saved to {filename}");
-                Console.WriteLine("\nSummary of best performers by matrix size:");
-                AnalyzeBenchmarkResults(filename);
+                if (File.Exists(filename))
+                {
+                    Console.WriteLine("\nSummary of best performers by matrix size:");
+                    AnalyzeBenchmarkResults(filename);
+                }
             }
             catch (Exception ex)
             {
@@ -309,37 +413,14 @@ namespace MatrixProd
                 {
                     Console.WriteLine($"Inner error: {ex.InnerException.Message}");
                 }
-            }
-        }
-
-        static void AnalyzeBenchmarkResults(string filename)
-        {
-            var results = File.ReadAllLines(filename)
-                .Skip(1) // Skip header
-                .Where(line => !line.Contains("Error"))
-                .Select(line =>
-                {
-                    var parts = line.Split(',');
-                    return new
-                    {
-                        Size = int.Parse(parts[0]),
-                        Method = parts[1],
-                        ComputeTime = double.Parse(parts[2], CultureInfo.InvariantCulture),
-                        GFlops = double.Parse(parts[5], CultureInfo.InvariantCulture)
-                    };
-                })
-                .GroupBy(r => r.Size)
-                .OrderBy(g => g.Key);
-
-            foreach (var sizeGroup in results)
-            {
-                var best = sizeGroup.OrderBy(r => r.ComputeTime).First();
-                Console.WriteLine($"Size {sizeGroup.Key}x{sizeGroup.Key}: Best method = {best.Method} ({best.ComputeTime:F2}ms, {best.GFlops:F2} GFlops)");
+                throw;
             }
         }
 
         static async Task RunTest(int matrixSize, string method, int iterations)
         {
+            await InitializeMultipliers();
+            var multiplier = await MatrixMultiplicationFactory.CreateMultiplier(method);
             Console.Write($"Running test for {matrixSize}x{matrixSize} matrix... ");
             var (computeTime, totalTime) = await RunBenchmark(matrixSize, method);
             string methodName = method switch
@@ -356,6 +437,48 @@ namespace MatrixProd
             Console.WriteLine($"Average compute time: {computeTime:F2}ms");
             Console.WriteLine($"Average total time:  {totalTime:F2}ms");
             Console.WriteLine($"Average overhead:    {totalTime - computeTime:F2}ms");
+        }
+
+        private static void AnalyzeBenchmarkResults(string filename)
+        {
+            try
+            {
+                var results = new Dictionary<int, List<(string method, double computeTime, double gflops)>>();
+                
+                // Read and parse CSV file
+                var lines = File.ReadAllLines(filename).Skip(1); // Skip header
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(',');
+                    if (parts.Length >= 6 && !parts.Contains("Error"))
+                    {
+                        int size = int.Parse(parts[0]);
+                        string method = parts[1];
+                        double computeTime = double.Parse(parts[2], CultureInfo.InvariantCulture);
+                        double gflops = double.Parse(parts[5], CultureInfo.InvariantCulture);
+
+                        if (!results.ContainsKey(size))
+                        {
+                            results[size] = new List<(string, double, double)>();
+                        }
+                        results[size].Add((method, computeTime, gflops));
+                    }
+                }
+
+                // Analyze results for each matrix size
+                foreach (var size in results.Keys.OrderBy(k => k))
+                {
+                    var bestResult = results[size]
+                        .OrderBy(r => r.computeTime)
+                        .FirstOrDefault();
+
+                    Console.WriteLine($"Size {size}x{size}: Best method = {bestResult.method} ({bestResult.computeTime:F2}ms, {bestResult.gflops:F2} GFlops)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error analyzing results: {ex.Message}");
+            }
         }
 
         static async Task Main(string[] args)
@@ -390,39 +513,8 @@ namespace MatrixProd
 
             try
             {
-                // Initialize GPU with conservative timeout
-                if (!MatrixMultiplicationFactory._gpuInitialized)
-                {
-                    Console.WriteLine("Attempting to initialize AMD GPU...");
-                    using var gpuInitTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                    using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(gpuInitTimeout.Token, cts.Token);
-                    
-                    try
-                    {
-                        var gpuTask = MatrixMultiplicationFactory.DetectAndInitializeGPU();
-                        var timeoutTask = Task.Delay(30000, combinedCts.Token);
-                        
-                        var completedTask = await Task.WhenAny(gpuTask, timeoutTask);
-                        if (completedTask == gpuTask && !gpuTask.IsFaulted)
-                        {
-                            var gpu = await gpuTask;
-                            if (gpu != null)
-                            {
-                                MatrixMultiplicationFactory._gpuMultiplier = gpu;
-                                MatrixMultiplicationFactory._gpuInitialized = true;
-                                Console.WriteLine("AMD GPU initialized successfully");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("GPU initialization timed out, will fall back to CPU methods");
-                        }
-                    }
-                    catch (OperationCanceledException) when (gpuInitTimeout.Token.IsCancellationRequested)
-                    {
-                        Console.WriteLine("GPU initialization timed out, will fall back to CPU methods");
-                    }
-                }
+                // Single initialization point
+                await InitializeMultipliers();
 
                 if (args.Length == 0 || args[0].ToLower() == "benchmark")
                 {
@@ -473,6 +565,7 @@ namespace MatrixProd
                 }
                 _multipliers.Clear();
                 MatrixMultiplicationFactory.Cleanup();
+                _initLock.Dispose();
                 
                 // Final cleanup message
                 Console.WriteLine("Cleanup completed. Program terminated safely.");

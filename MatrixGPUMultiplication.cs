@@ -34,11 +34,8 @@ public class MatrixGPUMultiplication : IMatrixMultiplication
     public MatrixGPUMultiplication(bool useColumns = false)
     {
         _useColumns = useColumns;
-        _gpuImpl = MatrixMultiplicationFactory.DetectAndInitializeGPU().Result;
-        if (_gpuImpl == null)
-        {
+        _gpuImpl = MatrixMultiplicationFactory._gpuMultiplier ?? 
             throw new PlatformNotSupportedException("No GPU implementation available");
-        }
     }
 
     public async Task<IMatrix> Multiply(IMatrix m1, IMatrix m2)
