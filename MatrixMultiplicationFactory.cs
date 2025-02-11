@@ -1,99 +1,215 @@
+using MatrixProd.Core.Interfaces;
+using MatrixProd.Core.Matrix;
+using MatrixProd.GPU;
+using System;
+using System.Threading.Tasks;
+using MatrixProd.GPU.AMD;
+using MatrixProd.GPU.NVIDIA;
+
 namespace MatrixProd;
 
-public interface MatrixMultiplication
+public class HybridMatrixMultiplication : IMatrixMultiplication, IDisposable
 {
-    Task<Matriz> multiplicar(Matriz m1, Matriz m2);
+    private const int CPU_THRESHOLD = 500;
+    private readonly IMatrixMultiplication _cpuMultiplier;
+    private IGPUMatrixMultiplication? _gpuMultiplier;
+    private bool _gpuFailed;
+    private bool _disposed;
+    private readonly object _gpuLock = new object();
+
+    public HybridMatrixMultiplication()
+    {
+        _cpuMultiplier = new RowMatrixMultiplication();
+        // Use the already initialized GPU instance from the factory
+        _gpuMultiplier = MatrixMultiplicationFactory._gpuMultiplier;
+    }
+
+    public async Task<IMatrix> Multiply(IMatrix m1, IMatrix m2)
+    {
+        if (_disposed) throw new ObjectDisposedException(nameof(HybridMatrixMultiplication));
+        
+        // Always use CPU for small matrices
+        if (m1.GetRows() <= CPU_THRESHOLD || m2.GetCols() <= CPU_THRESHOLD)
+        {
+            return await _cpuMultiplier.Multiply(m1, m2);
+        }
+
+        // If GPU hasn't failed and we have a multiplier, try GPU
+        if (!_gpuFailed && _gpuMultiplier != null)
+        {
+            try
+            {
+                return await _gpuMultiplier.Multiply(m1, m2);
+            }
+            catch (Exception ex)
+            {
+                // Log the error and mark GPU as failed
+                Console.WriteLine($"GPU multiplication failed, falling back to CPU: {ex.Message}");
+                lock (_gpuLock)
+                {
+                    _gpuFailed = true;
+                }
+            }
+        }
+        
+        // Fallback to CPU
+        return await _cpuMultiplier.Multiply(m1, m2);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            if (_cpuMultiplier is IDisposable disposableCpuMultiplier)
+            {
+                disposableCpuMultiplier.Dispose();
+            }
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
+    }
 }
 
 public static class MatrixMultiplicationFactory
 {
-    public static async Task DownloadAndSetupGPUCode()
-    {
-        var gpu = await DetectGPU();
-        await DownloadGPUSpecificCode(gpu);
-    }
+    internal static IGPUMatrixMultiplication? _gpuMultiplier;
+    internal static bool _gpuInitialized;
+    private static readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
 
-    private static async Task<string> DetectGPU()
+    public static async Task<IMatrixMultiplication> CreateMultiplier(string method)
     {
-        if (OperatingSystem.IsWindows())
+        try
         {
-            // Use PowerShell script
-            using var ps = System.Management.Automation.PowerShell.Create();
-            ps.AddScript(File.ReadAllText("scripts/detect-gpu.ps1"));
-            ps.AddCommand("Get-GPUVendor");
-            var result = await ps.InvokeAsync();
-            return result[0].ToString();
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            // Use bash script
-            var process = new System.Diagnostics.Process
+            // For GPU methods, we'll use the already initialized GPU if available
+            if ((method == "g" || method == "h") && !MatrixMultiplicationFactory._gpuInitialized)
             {
-                StartInfo = new System.Diagnostics.ProcessStartInfo
+                await MatrixMultiplicationFactory._initLock.WaitAsync();
+                try
                 {
-                    FileName = "/bin/bash",
-                    Arguments = "scripts/detect-gpu.sh",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false
+                    if (!MatrixMultiplicationFactory._gpuInitialized)
+                    {
+                        // Instead of detecting again, we'll check if _gpuMultiplier is already initialized
+                        if (MatrixMultiplicationFactory._gpuMultiplier == null)
+                        {
+                            // If not initialized and it's null, we'll fallback to CPU
+                            Console.WriteLine("No GPU initialized. Using CPU implementation.");
+                            method = "f"; // Fallback to CPU
+                        }
+                        MatrixMultiplicationFactory._gpuInitialized = true;
+                    }
                 }
+                finally
+                {
+                    MatrixMultiplicationFactory._initLock.Release();
+                }
+            }
+
+            // Create appropriate multiplier based on method
+            IMatrixMultiplication multiplier = method switch
+            {
+                "f" => new MatrixFilMultiplication(),
+                "c" => new MatrixColMultiplication(),
+                "g" when MatrixMultiplicationFactory._gpuMultiplier != null => new GPUMatrixMultiplier(MatrixMultiplicationFactory._gpuMultiplier),
+                "g" => new MatrixFilMultiplication(), // Fallback to CPU if no GPU
+                "h" => new HybridMatrixMultiplication(),
+                _ => throw new ArgumentException($"Invalid multiplication method: {method}", nameof(method))
             };
-            process.Start();
-            string output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            return output.Trim();
+
+            Console.WriteLine($"Created multiplier for method: {method}");
+            return multiplier;
         }
-        return "UNKNOWN";
-    }
-
-    private static async Task DownloadGPUSpecificCode(string gpuVendor)
-    {
-        string repoUrl = "https://github.com/yourusername/MatrixProd.git";
-        string branch = gpuVendor switch
+        catch (Exception ex)
         {
-            "NVIDIA" => "nvidia-gpu",
-            "AMD" => "amd-gpu",
-            _ => "master"
-        };
-
-        // Clone specific branch
-        var process = new System.Diagnostics.Process
-        {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = $"clone -b {branch} --single-branch {repoUrl} gpu-code",
-                RedirectStandardOutput = true,
-                UseShellExecute = false
-            }
-        };
-        await process.WaitForExitAsync();
-
-        // Copy necessary files
-        if (Directory.Exists("gpu-code"))
-        {
-            foreach (var file in Directory.GetFiles("gpu-code", "Matrix*Multiplication.cs"))
-            {
-                File.Copy(file, Path.Combine(Directory.GetCurrentDirectory(), Path.GetFileName(file)), true);
-            }
-            Directory.Delete("gpu-code", true);
+            Console.WriteLine($"Error creating matrix multiplier: {ex.Message}");
+            // Final fallback to CPU implementation
+            return new MatrixFilMultiplication();
         }
     }
 
-    public static MatrixMultiplication CreateMultiplier(string method)
+    internal static async Task<IGPUMatrixMultiplication?> DetectAndInitializeGPU()
     {
-        return method switch
+        // Try AMD first since it was detected in the environment
+        try
         {
-            "f" => new MatrixFilMultiplication(),
-            "c" => new MatrixColMultiplication(),
-            "g" => CreateGPUMultiplier(),
-            "h" => new MatrixHybridMultiplication(),
-            _ => throw new ArgumentException("Invalid multiplication method")
-        };
+            Console.WriteLine("Attempting to initialize AMD GPU...");
+            var amdImpl = new AmdImplementation();
+            await amdImpl.Device.Initialize();
+            if (amdImpl.Device.IsAvailable)
+            {
+                await Task.Delay(100); // Give the GPU initialization time to settle
+                Console.WriteLine("AMD GPU initialized successfully");
+                return amdImpl;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"AMD GPU initialization failed: {ex.Message}");
+        }
+
+        // Then try NVIDIA
+        try
+        {
+            Console.WriteLine("Attempting to initialize NVIDIA GPU...");
+            var nvidiaImpl = new NvidiaImplementation();
+            await nvidiaImpl.Device.Initialize();
+            if (nvidiaImpl.Device.IsAvailable)
+            {
+                await Task.Delay(100); // Give the GPU initialization time to settle
+                Console.WriteLine("NVIDIA GPU initialized successfully");
+                return nvidiaImpl;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"NVIDIA GPU initialization failed: {ex.Message}");
+        }
+
+        await Task.Delay(10); // Small delay before returning null to ensure proper async behavior
+        return null;
+    }
+    
+    public static void Cleanup()
+    {
+        if (MatrixMultiplicationFactory._gpuMultiplier is IDisposable disposable)
+        {
+            try
+            {
+                disposable.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during GPU cleanup: {ex.Message}");
+            }
+        }
+        MatrixMultiplicationFactory._gpuMultiplier = null;
+        MatrixMultiplicationFactory._gpuInitialized = false;
+        MatrixMultiplicationFactory._initLock.Dispose();
+    }
+}
+
+internal class GPUMatrixMultiplier : IMatrixMultiplication, IDisposable
+{
+    private readonly IGPUMatrixMultiplication _gpuMultiplier;
+    private bool _disposed;
+
+    public GPUMatrixMultiplier(IGPUMatrixMultiplication gpuMultiplier)
+    {
+        _gpuMultiplier = gpuMultiplier;
     }
 
-    private static MatrixMultiplication CreateGPUMultiplier()
+    public Task<IMatrix> Multiply(IMatrix m1, IMatrix m2)
     {
-        // This will be implemented in the GPU-specific branches
-        throw new NotImplementedException("GPU multiplication not available in base version. Please run the installer first.");
+        if (_disposed) throw new ObjectDisposedException(nameof(GPUMatrixMultiplier));
+        return _gpuMultiplier.Multiply(m1, m2);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            (_gpuMultiplier as IDisposable)?.Dispose();
+            _disposed = true;
+        }
+        GC.SuppressFinalize(this);
     }
 }

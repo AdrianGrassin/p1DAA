@@ -7,10 +7,42 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Platforms>x64</Platforms>
+    <RootNamespace>MatrixProd</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GPUVendor>AUTO</GPUVendor>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ManagedCuda-12" Version="12.3.54" />
+    <PackageReference Include="ManagedCuda-CUBLAS" Version="12.4.57" />
     <PackageReference Include="System.Management.Automation" Version="7.4.0" />
+    
+    <!-- GPU-specific packages -->
+    <PackageReference Include="OpenCL.Net" Version="2.2.9" NoWarn="NU1701" Condition="'$(GPUVendor)' == 'AMD' Or '$(GPUVendor)' == 'AUTO'" />
+  </ItemGroup>
+
+  <!-- Include all source files in their proper directories -->
+  <ItemGroup>
+    <Compile Include="Core\**\*.cs" />
+    <Compile Include="GPU\**\*.cs" />
+    <Compile Include="*.cs" />
+  </ItemGroup>
+
+  <!-- Include scripts and installers -->
+  <ItemGroup>
+    <None Include="Scripts\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Installers\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Exclude obj and bin directories -->
+  <ItemGroup>
+    <Compile Remove="obj\**" />
+    <Compile Remove="bin\**" />
+    <None Remove="obj\**" />
+    <None Remove="bin\**" />
   </ItemGroup>
 
 </Project>

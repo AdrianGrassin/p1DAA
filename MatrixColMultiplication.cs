@@ -1,57 +1,45 @@
 // MatrixColMultiplication.cs
 using System.Threading.Tasks;
+using MatrixProd.Core.Matrix;
+using MatrixProd.Core.Interfaces;
 
 namespace MatrixProd;
 
-public class MatrixColMultiplication : MatrixMultiplication
+public class MatrixColMultiplication : IMatrixMultiplication, IDisposable
 {
-    public async Task<Matriz> multiplicar(Matriz m1, Matriz m2)
+    private bool _disposed;
+
+    public async Task<IMatrix> Multiply(IMatrix m1, IMatrix m2)
     {
-        if (m1.getCols() != m2.getRows())
-        {
+        if (_disposed) throw new ObjectDisposedException(nameof(MatrixColMultiplication));
+
+        if (m1.GetCols() != m2.GetRows())
             throw new ArgumentException("Las dimensiones de las matrices no son compatibles para la multiplicación");
-        }
 
-        int rows = m1.getRows();
-        int cols = m2.getCols();
-        int innerDim = m1.getCols();
-        Matriz result = new(rows, cols);
-
-        const int BLOCK_SIZE = 32; // Cache-friendly block size
+        var result = new Matrix(m1.GetRows(), m2.GetCols());
 
         await Task.Run(() =>
         {
-            // Pre-cache columns of second matrix for better memory access
-            var colCache = new int[cols][];
-            Parallel.For(0, cols, j =>
+            for (int j = 0; j < m2.GetCols(); j++)
             {
-                colCache[j] = new int[innerDim];
-                for (int k = 0; k < innerDim; k++)
+                for (int i = 0; i < m1.GetRows(); i++)
                 {
-                    colCache[j][k] = m2.get(k, j);
-                }
-            });
-
-            // Column-wise multiplication with blocking
-            Parallel.For(0, rows, i =>
-            {
-                for (int j = 0; j < cols; j += BLOCK_SIZE)
-                {
-                    int endCol = Math.Min(j + BLOCK_SIZE, cols);
-                    for (int b = j; b < endCol; b++)
+                    int sum = 0;
+                    for (int k = 0; k < m1.GetCols(); k++)
                     {
-                        int sum = 0;
-                        var col = colCache[b];
-                        for (int k = 0; k < innerDim; k++)
-                        {
-                            sum += m1.get(i, k) * col[k];
-                        }
-                        result.set(i, b, sum);
+                        sum += m1.Get(i, k) * m2.Get(k, j);
                     }
+                    result.Set(i, j, sum);
                 }
-            });
+            }
         });
 
         return result;
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }

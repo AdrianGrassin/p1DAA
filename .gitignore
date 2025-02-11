@@ -3,10 +3,6 @@
 [Rr]elease/
 x64/
 x86/
-[Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
 [Bb]in/
 [Oo]bj/
 [Ll]og/
@@ -26,14 +22,27 @@ artifacts/
 # VS Code files
 .vscode/
 
+# Build results
+[Bb]in/
+[Oo]bj/
+
 # Results and temp files
 results_comparison.csv
 *.tmp
 
-# GPU-specific files that will be in their respective branches
-MatrixCUDAMultiplication.cs
-MatrixGPUMultiplication.cs
-
-# Documentation and reports (optional per branch)
+# Documentation
 docs/
 informes/
+
+# Backup & report files from converting an old project file
+# to a newer Visual Studio version
+_UpgradeReport_Files/
+Backup*/
+UpgradeLog*.XML
+UpgradeLog*.htm
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/

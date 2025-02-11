@@ -1,9 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "kJzso+VjcLC9MLY8wt4xJJI7frFFUWAh9X2qVpZe1tC0wlebaizzfdNyU9KYMeebrTIturbVgyXejDxyendU3A==",
+  "dgSpecHash": "hBZwcZe3Zhnh+yUcgBGzSXU4pMMfD31U2JcfrKaBwSlKIFLgl4bQOqA30MnIUTJPnqDyB8sgnr6nLo0HwuZ1xA==",
   "success": true,
   "projectFilePath": "C:\\Users\\grass\\Desktop\\P1\\MatrixProd\\MatrizProd.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\grass\\.nuget\\packages\\managedcuda-12\\12.3.54\\managedcuda-12.12.3.54.nupkg.sha512",
+    "C:\\Users\\grass\\.nuget\\packages\\managedcuda-cublas\\12.4.57\\managedcuda-cublas.12.4.57.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\microsoft.applicationinsights\\2.21.0\\microsoft.applicationinsights.2.21.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\microsoft.management.infrastructure\\3.0.0\\microsoft.management.infrastructure.3.0.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\microsoft.management.infrastructure.runtime.unix\\3.0.0\\microsoft.management.infrastructure.runtime.unix.3.0.0.nupkg.sha512",
@@ -13,6 +15,7 @@
     "C:\\Users\\grass\\.nuget\\packages\\microsoft.security.extensions\\1.2.0\\microsoft.security.extensions.1.2.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\microsoft.win32.registry.accesscontrol\\8.0.0\\microsoft.win32.registry.accesscontrol.8.0.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
+    "C:\\Users\\grass\\.nuget\\packages\\opencl.net\\2.2.9\\opencl.net.2.2.9.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\system.codedom\\8.0.0\\system.codedom.8.0.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\system.configuration.configurationmanager\\8.0.0\\system.configuration.configurationmanager.8.0.0.nupkg.sha512",
     "C:\\Users\\grass\\.nuget\\packages\\system.diagnostics.diagnosticsource\\8.0.0\\system.diagnostics.diagnosticsource.8.0.0.nupkg.sha512",

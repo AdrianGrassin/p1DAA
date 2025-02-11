@@ -1,8 +1,1 @@
-Tamaño,Tiempo Filas (ms),Tiempo Columnas (ms)
-100,3.40,4.00
-500,381.00,362.80
-800,1493.40,1460.80
-1000,2770.80,2863.20
-1500,9344.80,9638.00
-2000,23206.00,23833.20
-2500,45145.00,45934.80
+Tamaño,Tiempo Filas (ms),Tiempo Columnas (ms),Tiempo GPU (ms),Tiempo Hibrido (ms)

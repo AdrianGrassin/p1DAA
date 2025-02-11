@@ -114,6 +114,32 @@ dotnet run csv
 - Use CPU methods for smaller matrices (<500x500)
 - Keep matrices in GPU memory when possible
 
+## Performance Characteristics
+
+Current benchmark results show:
+
+- Small matrices (<500x500):
+  - CPU outperforms GPU due to data transfer overhead
+  - Hybrid mode automatically switches to CPU
+  - Best performance with row-based CPU implementation
+
+- Medium matrices (500x500 - 1000x1000):
+  - GPU starts showing benefits
+  - Hybrid mode provides best performance
+  - 2-3x speedup over CPU-only methods
+
+- Large matrices (>1000x1000):
+  - GPU provides significant speedup (2.86 GFlops)
+  - Hybrid mode slightly edges out pure GPU
+  - Up to 25x speedup over CPU methods
+
+### Recommendations
+
+For optimal performance:
+- Use CPU methods for matrices smaller than 500x500 
+- Use Hybrid mode for matrices 500x500 to 1000x1000
+- Use GPU mode for matrices larger than 1000x1000
+
 ## Troubleshooting
 
 ### Common Issues
