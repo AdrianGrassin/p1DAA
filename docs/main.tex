@@ -127,11 +127,11 @@ El patrón estrategia permite definir una familia de algoritmos intercambiables 
 Los resultados muestran tres comportamientos distintivos según el tamaño de las matrices:
 
 \begin{itemize}
-    \item \textbf{Matrices pequeñas < (500x500):} La implementación por filas es superior debido a la mejor localidad de memoria y menor overhead. La versión por columnas muestra un rendimiento significativamente peor debido a los fallos de caché.
+    \item \textbf{Matrices pequeñas \< (500x500):} La implementación por filas es superior debido a la mejor localidad de memoria y menor overhead. La versión por columnas muestra un rendimiento significativamente peor debido a los fallos de caché.
     
     \item \textbf{Matrices medianas (500x500-1000x1000):} La GPU comienza a mostrar ventajas, alcanzando hasta 105 GFlops en matrices de 750x750, comparado con 0.77 GFlops de la CPU.
     
-    \item \textbf{Matrices grandes > (1000x1000):} La diferencia entre implementaciones se amplifica. La versión por columnas muestra el peor rendimiento (0.11 GFlops), mientras que la GPU mantiene un rendimiento superior (11-129 GFlops).
+    \item \textbf{Matrices grandes \> (1000x1000):} La diferencia entre implementaciones se amplifica. La versión por columnas muestra el peor rendimiento (0.11 GFlops), mientras que la GPU mantiene un rendimiento superior (11-129 GFlops).
 \end{itemize}
 
 La implementación por filas supera consistentemente a la versión por columnas debido a la arquitectura de memoria de la CPU, que favorece accesos secuenciales. La GPU muestra una clara ventaja en matrices grandes debido a su capacidad de procesamiento paralelo masivo.
